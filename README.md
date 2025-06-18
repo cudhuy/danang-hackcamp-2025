@@ -33,7 +33,7 @@ git clone https://github.com/openguild-labs/open-danang-hackcamp-2025.git
 Go to **Participant Registration** section and register to be the workshop participants. Add the below to the list, replace any placeholder with your personal information.
 
 ```
-| 🦄 | Name | Github username | Your current occupation |
+| 🦄 | Đức Huy | cudhuy | System Engineer |
 ```
 
 - Step 5: `Commit` your code and push to the forked Github repository
