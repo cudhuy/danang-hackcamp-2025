@@ -122,7 +122,7 @@ contract LendingBorrowing is Ownable {
     function _maxBorrowableAmount(
         address _user
     ) internal view returns (uint256) {
-        // TODO: Implement _loanRequiredCollateral logic
+        // TODO: Implement _loan    logic
         return (collateralBalances[_user] * collateralFactor) / 100;
     }
 
