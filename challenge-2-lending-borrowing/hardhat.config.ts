@@ -41,8 +41,8 @@ const config: HardhatUserConfig = {
       url: "https://testnet-passet-hub-eth-rpc.polkadot.io/",
       accounts: [
         process.env.PRIVATE_KEY as string,
-        process.env.PRIVATE_KEY_2 as string,
-        process.env.PRIVATE_KEY_3 as string,
+        // process.env.PRIVATE_KEY_2 as string,
+        // process.env.PRIVATE_KEY_3 as string,
       ],
       timeout: 40000000000000000000, // 60 seconds
     },

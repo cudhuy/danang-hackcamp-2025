@@ -10,7 +10,7 @@ describe('LendingBorrowing', function () {
 	let lendingToken: MockERC20;
 	let owner: HardhatEthersSigner;
 	let user1: HardhatEthersSigner;
-	// let user2: HardhatEthersSigner;
+	let user2: HardhatEthersSigner;
 
 	const COLLATERAL_FACTOR: bigint = 50n; // 50%
 	const INITIAL_SUPPLY: bigint = ethers.parseEther('1000000'); // 1 million tokens
