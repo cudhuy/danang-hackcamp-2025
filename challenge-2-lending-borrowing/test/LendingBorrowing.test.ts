@@ -25,13 +25,13 @@ describe('LendingBorrowing', function () {
 
 		const collateralTokenInstance = await MyTokenFactory.deploy(
 			'Collateral Token',
-			'HARRY',
+			'MY-COLL',
 		);
 		collateralToken = await collateralTokenInstance.waitForDeployment();
 
 		const lendingTokenInstance = await MyTokenFactory.deploy(
 			'Lending Token',
-			'HARRY-LEND',
+			'MY-LEND',
 		);
 		lendingToken = await lendingTokenInstance.waitForDeployment();
 
