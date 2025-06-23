@@ -7,11 +7,11 @@ const UniswapV2ERC20Module = buildModule('UniswapV2ERC20Module', (m) => {
 
 	console.log('Deploying UniswapV2ERC20 contract...');
 
-	// Deploying the UniswapV2ERC20 contract for the Harry token
-	const harryToken = m.contract('UniswapV2ERC20', []);
+	// Deploying the UniswapV2ERC20 contract for the Uni Token
+	const uniToken = m.contract('UniswapV2ERC20', []);
 
 	return {
-		harryToken,
+		uniToken,
 	};
 });
 

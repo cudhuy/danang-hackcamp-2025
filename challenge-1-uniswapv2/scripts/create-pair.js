@@ -13,7 +13,7 @@ async function main() {
 
 	console.log('Creating UniswapV2Pair contract...');
 	const pairTx = await factory.connect(deployer).createPair(
-		'0x2cD71Fb0600627757b212bd174B9FE3F315E9786', // HarryToken address
+		'0x2cD71Fb0600627757b212bd174B9FE3F315E9786', // UniToken address
 		'0x0eb09a1b25EC457f442E5F4F84591F94B9d6B846', //  WETH address
 	);
 
