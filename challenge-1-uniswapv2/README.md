@@ -21,7 +21,6 @@ Build the UI with features based on the requirements:
 
 - [x] **Connect the frontend to Asset Hub using MetaMask and Web3 Tools ( Viem, Ethersjs)**
 - [ ] **Build frontend with swap interface and liquidity pool management**
-
 ## Network Info
 
 | Property | Value |
@@ -34,7 +33,7 @@ Build the UI with features based on the requirements:
 
 
 ## Submission Requirements 
-- [ ] Deploy a factory, pair, and ERC20 token contracts on Paseo Asset Hub
+- [x] Deploy a factory, pair, and ERC20 token contracts on Paseo Asset Hub
 - [ ] Complete UI 
 
 

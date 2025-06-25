@@ -24,14 +24,14 @@ const Header = () => {
 				</Link>
 				<Link
 					className='flex items-center gap-1 text-sm underline underline-offset-4 self-center ease-linear duration-200 hover:scale-90'
-					href='/token-vesting'
+					href='/swap'
 				>
 					<MdSwapHoriz size={18} />
 					Swap
 				</Link>
 				<Link
 					className='flex items-center gap-1 text-sm underline underline-offset-4 self-center ease-linear duration-200 hover:scale-90'
-					href='/yield-farming'
+					href='/liquidity-pool'
 				>
 					<TbPool size={18} />
 					Liquidity Pool
