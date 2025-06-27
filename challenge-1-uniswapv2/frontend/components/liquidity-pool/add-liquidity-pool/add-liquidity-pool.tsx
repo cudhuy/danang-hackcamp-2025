@@ -16,18 +16,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
-import { TokenPairSelector } from './token-pair-selector';
-import { LiquidityInput } from './liquidity-input';
-import { PoolPreview } from './pool-preview';
+import { TokenPairSelector } from '../create-liquidity-pool/token-pair-selector';
+import { LiquidityInput } from '../create-liquidity-pool/liquidity-input';
+import { PoolPreview } from '../create-liquidity-pool/pool-preview';
 import {
 	useConfig,
 	useWriteContract,
 	useWaitForTransactionReceipt,
 	useReadContracts,
-	useReadContract,
 } from 'wagmi';
 import { contractAddresses } from '@/lib/contractAddresses';
-import { uniswapV2FactoryAbi, uniswapV2PairAbi, erc20Abi } from '@/lib/abi';
+import { erc20Abi, uniswapV2PairAbi } from '@/lib/abi';
 import { Address, getAddress, parseUnits, BaseError } from 'viem';
 import { useAtomValue } from 'jotai';
 import { addressAtom } from '../../sigpasskit';
@@ -70,7 +69,7 @@ const availableTokens: Token[] = [
 	},
 ];
 
-export function CreateLiquidityPoolComponent() {
+export function AddLiquidityPoolComponent() {
 	const router = useRouter();
 	const config = useConfig();
 	const address = useAtomValue(addressAtom);
@@ -80,21 +79,13 @@ export function CreateLiquidityPoolComponent() {
 	const [amountA, setAmountA] = useState<string>('');
 	const [amountB, setAmountB] = useState<string>('');
 	const [feeRate] = useState('0.3');
-	const [pairExists, setPairExists] = useState(false);
 	const [pairAddress, setPairAddress] = useState<string | null>(null);
 	const [currentStep, setCurrentStep] = useState<
-		| 'idle'
-		| 'creating'
-		| 'transferA'
-		| 'transferB'
-		| 'minting'
-		| 'success'
-		| 'error'
+		'idle' | 'transferA' | 'transferB' | 'minting' | 'success' | 'error'
 	>('idle');
 	const [showDialog, setShowDialog] = useState(false);
 	const [errorMessage, setErrorMessage] = useState<string>('');
 	const [transactionHashes, setTransactionHashes] = useState<string[]>([]);
-	const [newPairAddress, setNewPairAddress] = useState<string | null>(null);
 
 	const currentAddress = address || wagmiAddress;
 	const currentConfig = address ? localConfig : config;
@@ -114,24 +105,6 @@ export function CreateLiquidityPoolComponent() {
 			hash,
 			config: currentConfig,
 		});
-
-	// Get newly created pair address after creation
-	const { data: newPairData, refetch: refetchPairAddress } = useReadContract({
-		config: currentConfig,
-		address: getAddress(contractAddresses.UNISWAP_V2_FACTORY) as Address,
-		abi: uniswapV2FactoryAbi,
-		functionName: 'getPair',
-		args:
-			tokenA && tokenB
-				? [
-						getAddress(tokenA.address) as Address,
-						getAddress(tokenB.address) as Address,
-				  ]
-				: undefined,
-		query: {
-			enabled: false, // Only enable when we need to fetch
-		},
-	});
 
 	// Get token balances
 	const { data: tokenDataA } = useReadContracts({
@@ -191,27 +164,7 @@ export function CreateLiquidityPoolComponent() {
 
 	const handleTransactionConfirmed = async () => {
 		try {
-			if (currentStep === 'creating') {
-				// Pair created, get the new pair address
-				console.log('Pair created, fetching new pair address...');
-				const result = await refetchPairAddress();
-				const fetchedPairAddress = result.data as string;
-
-				if (
-					fetchedPairAddress &&
-					fetchedPairAddress !== '0x0000000000000000000000000000000000000000'
-				) {
-					setNewPairAddress(fetchedPairAddress);
-					console.log('New pair address:', fetchedPairAddress);
-
-					// Small delay to ensure state updates
-					setTimeout(() => {
-						handleTransferTokenA(fetchedPairAddress);
-					}, 1000);
-				} else {
-					throw new Error('Failed to get new pair address');
-				}
-			} else if (currentStep === 'transferA') {
+			if (currentStep === 'transferA') {
 				// Token A transferred, now transfer token B
 				setTimeout(() => {
 					handleTransferTokenB();
@@ -250,42 +203,17 @@ export function CreateLiquidityPoolComponent() {
 	};
 
 	const handlePairStatusChange = (exists: boolean, address: string | null) => {
-		setPairExists(exists);
-		setPairAddress(address);
-	};
-
-	const handleCreatePair = async () => {
-		if (!tokenA || !tokenB) return;
-
-		try {
-			setCurrentStep('creating');
-			setShowDialog(true);
-			setTransactionHashes([]);
-			resetWriteContract();
-
-			console.log('Creating pair for:', tokenA.symbol, 'and', tokenB.symbol);
-
-			await writeContractAsync({
-				account: address ? await getSigpassWallet() : undefined,
-				address: getAddress(contractAddresses.UNISWAP_V2_FACTORY),
-				abi: uniswapV2FactoryAbi,
-				functionName: 'createPair',
-				args: [getAddress(tokenA.address), getAddress(tokenB.address)],
-			});
-		} catch (error) {
-			console.error('Create pair failed:', error);
+		if (!exists) {
 			setCurrentStep('error');
-			setErrorMessage('Failed to create pair');
+			setErrorMessage('No existing pool found for selected token pair');
+			setPairAddress(null);
+		} else {
+			setPairAddress(address);
 		}
 	};
 
-	const handleTransferTokenA = async (targetPairAddress?: string) => {
-		if (!tokenA || !amountA || !tokenDataA) return;
-
-		const pairAddr = targetPairAddress || pairAddress || newPairAddress;
-		if (!pairAddr) {
-			throw new Error('No pair address available');
-		}
+	const handleTransferTokenA = async () => {
+		if (!tokenA || !amountA || !tokenDataA || !pairAddress) return;
 
 		try {
 			setCurrentStep('transferA');
@@ -294,14 +222,20 @@ export function CreateLiquidityPoolComponent() {
 			const decimalsA = tokenDataA[1]?.result as number;
 			const amountAWei = parseUnits(amountA, decimalsA);
 
-			console.log('Transferring', amountA, tokenA.symbol, 'to pair:', pairAddr);
+			console.log(
+				'Transferring',
+				amountA,
+				tokenA.symbol,
+				'to pair:',
+				pairAddress,
+			);
 
 			await writeContractAsync({
 				account: address ? await getSigpassWallet() : undefined,
 				address: getAddress(tokenA.address),
 				abi: erc20Abi,
 				functionName: 'transfer',
-				args: [getAddress(pairAddr), amountAWei],
+				args: [getAddress(pairAddress), amountAWei],
 			});
 		} catch (error) {
 			console.error('Transfer token A failed:', error);
@@ -311,12 +245,7 @@ export function CreateLiquidityPoolComponent() {
 	};
 
 	const handleTransferTokenB = async () => {
-		if (!tokenB || !amountB || !tokenDataB) return;
-
-		const pairAddr = pairAddress || newPairAddress;
-		if (!pairAddr) {
-			throw new Error('No pair address available');
-		}
+		if (!tokenB || !amountB || !tokenDataB || !pairAddress) return;
 
 		try {
 			setCurrentStep('transferB');
@@ -325,14 +254,20 @@ export function CreateLiquidityPoolComponent() {
 			const decimalsB = tokenDataB[1]?.result as number;
 			const amountBWei = parseUnits(amountB, decimalsB);
 
-			console.log('Transferring', amountB, tokenB.symbol, 'to pair:', pairAddr);
+			console.log(
+				'Transferring',
+				amountB,
+				tokenB.symbol,
+				'to pair:',
+				pairAddress,
+			);
 
 			await writeContractAsync({
 				account: address ? await getSigpassWallet() : undefined,
 				address: getAddress(tokenB.address),
 				abi: erc20Abi,
 				functionName: 'transfer',
-				args: [getAddress(pairAddr), amountBWei],
+				args: [getAddress(pairAddress), amountBWei],
 			});
 		} catch (error) {
 			console.error('Transfer token B failed:', error);
@@ -342,22 +277,17 @@ export function CreateLiquidityPoolComponent() {
 	};
 
 	const handleMintLiquidity = async () => {
-		if (!currentAddress) return;
-
-		const pairAddr = pairAddress || newPairAddress;
-		if (!pairAddr) {
-			throw new Error('No pair address available');
-		}
+		if (!currentAddress || !pairAddress) return;
 
 		try {
 			setCurrentStep('minting');
 			resetWriteContract();
 
-			console.log('Minting LP tokens for pair:', pairAddr);
+			console.log('Minting LP tokens for pair:', pairAddress);
 
 			await writeContractAsync({
 				account: address ? await getSigpassWallet() : undefined,
-				address: getAddress(pairAddr),
+				address: getAddress(pairAddress),
 				abi: uniswapV2PairAbi,
 				functionName: 'mint',
 				args: [currentAddress as Address],
@@ -369,8 +299,16 @@ export function CreateLiquidityPoolComponent() {
 		}
 	};
 
-	const handleAddLiquidityToExistingPool = async () => {
-		if (!pairAddress) return;
+	const handleAddLiquidity = async () => {
+		if (
+			!currentAddress ||
+			!tokenA ||
+			!tokenB ||
+			!amountA ||
+			!amountB ||
+			!pairAddress
+		)
+			return;
 
 		try {
 			setCurrentStep('transferA');
@@ -378,26 +316,11 @@ export function CreateLiquidityPoolComponent() {
 			setTransactionHashes([]);
 			resetWriteContract();
 
-			// For existing pools, start with transferring tokens
 			await handleTransferTokenA();
 		} catch (error) {
 			console.error('Add liquidity failed:', error);
-		}
-	};
-
-	const handleMainAction = async () => {
-		if (!currentAddress || !tokenA || !tokenB || !amountA || !amountB) return;
-
-		try {
-			if (pairExists && pairAddress) {
-				// Pair exists, start with token transfers
-				await handleAddLiquidityToExistingPool();
-			} else {
-				// Create new pair first
-				await handleCreatePair();
-			}
-		} catch (error) {
-			console.error('Main action failed:', error);
+			setCurrentStep('error');
+			setErrorMessage('Failed to initiate liquidity addition');
 		}
 	};
 
@@ -408,16 +331,16 @@ export function CreateLiquidityPoolComponent() {
 		amountB &&
 		parseFloat(amountA) > 0 &&
 		parseFloat(amountB) > 0 &&
-		currentAddress;
+		currentAddress &&
+		pairAddress;
 
 	const getButtonText = () => {
 		if (!currentAddress) return 'Connect Wallet';
 		if (!tokenA || !tokenB) return 'Select Tokens';
+		if (!pairAddress) return 'No Pool Found';
 		if (!amountA || !amountB) return 'Enter Amounts';
 
 		switch (currentStep) {
-			case 'creating':
-				return 'Creating Pool...';
 			case 'transferA':
 				return 'Transferring Token A...';
 			case 'transferB':
@@ -425,14 +348,12 @@ export function CreateLiquidityPoolComponent() {
 			case 'minting':
 				return 'Minting LP Tokens...';
 			default:
-				return pairExists ? 'Add Liquidity' : 'Create Pool & Add Liquidity';
+				return 'Add Liquidity';
 		}
 	};
 
 	const getStepDescription = () => {
 		switch (currentStep) {
-			case 'creating':
-				return 'Creating new liquidity pool...';
 			case 'transferA':
 				return `Transferring ${tokenA?.symbol} to pool...`;
 			case 'transferB':
@@ -451,7 +372,6 @@ export function CreateLiquidityPoolComponent() {
 	const resetProcess = () => {
 		setCurrentStep('idle');
 		setTransactionHashes([]);
-		setNewPairAddress(null);
 		setErrorMessage('');
 		resetWriteContract();
 		setShowDialog(false);
@@ -471,15 +391,15 @@ export function CreateLiquidityPoolComponent() {
 				</Button>
 				<div>
 					<h2 className='text-2xl font-bold text-gray-900 dark:text-white'>
-						Create Liquidity Pool
+						Add Liquidity to Pool
 					</h2>
 					<p className='text-gray-600 dark:text-gray-400 mt-1'>
-						Add liquidity to earn trading fees
+						Add liquidity to an existing pool to earn trading fees
 					</p>
 				</div>
 			</div>
 
-			{/* Pool Creation Form */}
+			{/* Liquidity Addition Form */}
 			<Card className='border border-gray-200 dark:border-gray-800'>
 				<CardHeader>
 					<CardTitle className='flex items-center justify-between'>
@@ -499,14 +419,13 @@ export function CreateLiquidityPoolComponent() {
 					/>
 
 					{/* Liquidity Inputs */}
-					{tokenA && tokenB && (
+					{tokenA && tokenB && pairAddress && (
 						<div className='space-y-4'>
 							<div className='flex items-center gap-2 mb-4'>
 								<Info className='h-4 w-4 text-blue-600' />
 								<span className='text-sm text-gray-600 dark:text-gray-400'>
-									{pairExists
-										? 'Add liquidity to existing pool'
-										: 'Set the initial price by providing both tokens'}
+									Add liquidity to the existing {tokenA.symbol}/{tokenB.symbol}{' '}
+									pool
 								</span>
 							</div>
 
@@ -533,7 +452,7 @@ export function CreateLiquidityPoolComponent() {
 					)}
 
 					{/* Pool Preview */}
-					{tokenA && tokenB && amountA && amountB && (
+					{tokenA && tokenB && amountA && amountB && pairAddress && (
 						<PoolPreview
 							tokenA={tokenA}
 							tokenB={tokenB}
@@ -545,7 +464,7 @@ export function CreateLiquidityPoolComponent() {
 
 					{/* Action Button */}
 					<Button
-						onClick={handleMainAction}
+						onClick={handleAddLiquidity}
 						disabled={!isFormValid || currentStep !== 'idle'}
 						className='w-full h-12 text-lg font-medium'
 					>
@@ -566,11 +485,10 @@ export function CreateLiquidityPoolComponent() {
 							<div className='space-y-2'>
 								<p className='font-medium'>Process:</p>
 								<ul className='text-sm space-y-1 ml-4 list-disc'>
-									{!pairExists && <li>Create new trading pair</li>}
 									<li>Transfer {tokenA?.symbol} to pair contract</li>
 									<li>Transfer {tokenB?.symbol} to pair contract</li>
 									<li>Mint LP tokens to your wallet</li>
-									<li>Start earning 0.3% fees from trades</li>
+									<li>Continue earning 0.3% fees from trades</li>
 								</ul>
 							</div>
 						</AlertDescription>
@@ -612,60 +530,39 @@ export function CreateLiquidityPoolComponent() {
 							</div>
 						)}
 
-						{/* New Pair Address (if created) */}
-						{newPairAddress && (
+						{/* Pair Address */}
+						{pairAddress && (
 							<div className='flex flex-row gap-2 items-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800'>
 								<Check className='w-5 h-5 text-green-600' />
-								<span className='font-medium'>New Pair:</span>
+								<span className='font-medium'>Pool Address:</span>
 								<a
 									className='flex flex-row gap-2 items-center underline underline-offset-4 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors'
 									href={`${getBlockExplorerUrl(
 										currentConfig,
 										chainId,
-									)}/address/${newPairAddress}`}
+									)}/address/${pairAddress}`}
 									target='_blank'
 									rel='noopener noreferrer'
 								>
-									{truncateHash(newPairAddress)}
+									{truncateHash(pairAddress)}
 									<ExternalLink className='w-4 h-4' />
 								</a>
-								<CopyButton copyText={newPairAddress} />
+								<CopyButton copyText={pairAddress} />
 							</div>
 						)}
 
 						{/* Progress Steps */}
 						<div className='space-y-2'>
-							{!pairExists && (
-								<div
-									className={`flex items-center gap-2 p-2 rounded ${
-										currentStep === 'creating'
-											? 'bg-blue-100 dark:bg-blue-900/20'
-											: newPairAddress
-											? 'bg-green-100 dark:bg-green-900/20'
-											: 'bg-gray-100 dark:bg-gray-800'
-									}`}
-								>
-									{newPairAddress ? (
-										<Check className='w-4 h-4 text-green-600' />
-									) : currentStep === 'creating' ? (
-										<div className='w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin' />
-									) : (
-										<div className='w-4 h-4 rounded-full border-2 border-gray-300' />
-									)}
-									<span className='text-sm'>Create pair</span>
-								</div>
-							)}
-
 							<div
 								className={`flex items-center gap-2 p-2 rounded ${
 									currentStep === 'transferA'
 										? 'bg-blue-100 dark:bg-blue-900/20'
-										: transactionHashes.length > (!pairExists ? 1 : 0)
+										: transactionHashes.length > 0
 										? 'bg-green-100 dark:bg-green-900/20'
 										: 'bg-gray-100 dark:bg-gray-800'
 								}`}
 							>
-								{transactionHashes.length > (!pairExists ? 1 : 0) ? (
+								{transactionHashes.length > 0 ? (
 									<Check className='w-4 h-4 text-green-600' />
 								) : currentStep === 'transferA' ? (
 									<div className='w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin' />
@@ -679,12 +576,12 @@ export function CreateLiquidityPoolComponent() {
 								className={`flex items-center gap-2 p-2 rounded ${
 									currentStep === 'transferB'
 										? 'bg-blue-100 dark:bg-blue-900/20'
-										: transactionHashes.length > (!pairExists ? 2 : 1)
+										: transactionHashes.length > 1
 										? 'bg-green-100 dark:bg-green-900/20'
 										: 'bg-gray-100 dark:bg-gray-800'
 								}`}
 							>
-								{transactionHashes.length > (!pairExists ? 2 : 1) ? (
+								{transactionHashes.length > 1 ? (
 									<Check className='w-4 h-4 text-green-600' />
 								) : currentStep === 'transferB' ? (
 									<div className='w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin' />
@@ -718,7 +615,7 @@ export function CreateLiquidityPoolComponent() {
 						<div className='space-y-2'>
 							{isConfirming && (
 								<div className='flex flex-row gap-2 items-center p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800 animate-pulse'>
-									<div className='w-5 h-5 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin' />
+									<div className='w-5 h-5 border-2 border-yellowribbon-500 border-t-transparent rounded-full animate-spin' />
 									<span className='text-yellow-600 dark:text-yellow-400 font-medium'>
 										Waiting for confirmation...
 									</span>
